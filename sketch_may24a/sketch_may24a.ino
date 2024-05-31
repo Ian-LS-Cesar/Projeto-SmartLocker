@@ -14,6 +14,8 @@ int buzzer = 33;
 int modo = 0;
 int segundos = 0;
 int trava = 32;
+MFRC522 rfid(pino_sda, pino_rst);
+byte allowedUID[4] = {0x73, 0x03, 0x5F, 0x09};
 
 String mensagens[] = {"Acesso Aceito", "Acesso Negado"};
 int indiceMensagem = 0;
@@ -22,8 +24,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 
 /* CONFIGURAÇÕES DO WIFI */
-const char* ssid = "iPhone de Ian Lucas"; // Nome da rede WiFi
-const char* password = "321321321"; // Senha da rede WiFi
+const char* ssid = ""; // Nome da rede WiFi
+const char* password = ""; // Senha da rede WiFi
 
 /* CONFIGURAÇÕES DO MQTT*/
 const char* mqttServer = "broker.hivemq.com"; // Endereço do Broker MQTT
@@ -42,22 +44,50 @@ void setup() {
     pinMode(buzzer, OUTPUT);
     pinMode(trava, OUTPUT);
     digitalWrite(trava, HIGH);
-
     
     Serial.begin(9600); // Configura a porta serial
     lcd.init();
     lcd.backlight();
+    SPI.begin();
+    rfid.PCD_Init();
+    Serial.println("Aproxime o cartão ou chaveiro RFID ao leitor...");  
     
 }
 
 void loop() {
-  destrancar();
-  trancar();
+
+  if (!rfid.PICC_IsNewCardPresent()) {
+    return;
+  }
+ 
+  if (!rfid.PICC_ReadCardSerial()) {
+    return;
+  }
+ 
+  bool accessGranted = true;
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    if (rfid.uid.uidByte[i] != allowedUID[i]) {
+      accessGranted = false;
+      break;
+    }
+  }
+
+  if (accessGranted) {
+    acessoAutorizado();
+  } else {
+    acessoNegado();
+  }
+
+  delay(1000);
+
+
+
 }
 
 void acessoAutorizado(){
   digitalWrite(led_verde, HIGH);
   liquidCrystal(0);
+  destrancar();
   delay(1000);
   digitalWrite(led_verde, LOW);
 }
@@ -71,7 +101,6 @@ void acessoNegado(){
 }
 
 void apitarBuzzer(){
-  delay(1000);
   digitalWrite(buzzer, HIGH);
   delay(1000);
   digitalWrite(buzzer, LOW);
@@ -86,10 +115,6 @@ void liquidCrystal(int indiceMensagem){
 
 void destrancar(){
     digitalWrite(trava, LOW);
-    delay(3000);
-}
-
-void trancar(){
-  digitalWrite(trava, HIGH);
-  delay(3000);
+    delay(5000);
+    digitalWrite(trava, HIGH);
 }
